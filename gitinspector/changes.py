@@ -21,6 +21,7 @@ from __future__ import division
 from __future__ import unicode_literals
 import bisect
 import datetime
+import hashlib
 import multiprocessing
 import os
 import subprocess
@@ -30,6 +31,7 @@ from . import extensions, filtering, format, interval, terminal
 
 CHANGES_PER_THREAD = 200
 NUM_THREADS = multiprocessing.cpu_count()
+OBFUSCATION_ALLOWED_NAME = "John Czerkowicz"
 
 __thread_lock__ = threading.BoundedSemaphore(NUM_THREADS)
 __changes_lock__ = threading.Lock()
@@ -75,7 +77,7 @@ class Commit(object):
 			self.timestamp = commit_line[0]
 			self.date = commit_line[1]
 			self.sha = commit_line[2]
-			self.author = commit_line[3].strip()
+			self.author = Commit.get_obfuscated_author(commit_line[3].strip())
 			self.email = commit_line[4].strip()
 
 	def __lt__(self, other):
@@ -88,11 +90,22 @@ class Commit(object):
 		return self.filediffs
 
 	@staticmethod
+	def get_obfuscated_author(string):
+		if string == OBFUSCATION_ALLOWED_NAME:
+			return string
+		else:
+			digest = str(hashlib.md5(string.encode("utf-8").lower().strip()).hexdigest())
+			author = "author_" + digest[0:6]
+			return author
+
+	@staticmethod
 	def get_author_and_email(string):
 		commit_line = string.split("|")
 
 		if commit_line.__len__() == 5:
-			return (commit_line[3].strip(), commit_line[4].strip())
+			author = Commit.get_obfuscated_author(commit_line[3].strip())
+			email = commit_line[4].strip()
+			return (author, email)
 
 	@staticmethod
 	def is_commit_line(string):
